@@ -10,6 +10,30 @@ import { PrismaService } from '../prisma/prisma.service';
 export class UserService {
   constructor(private readonly prismaService: PrismaService) {}
 
+  async checkQuiz(tg_id: number, quiz_id: string): Promise<boolean> {
+    try {
+      const user = await this.findUser(tg_id);
+      return user.completed_quiz.includes(quiz_id);
+    } catch (e) {
+      console.error(e);
+      throw new InternalServerErrorException('Server panic');
+    }
+  }
+
+  async updateQuizAndRating(tg_id: number, quiz_id: string, balls: number) {
+    await this.prismaService.user.update({
+      where: { telegram_id: tg_id },
+      data: {
+        completed_quiz: {
+          push: quiz_id,
+        },
+        rating: {
+          increment: balls,
+        },
+      },
+    });
+  }
+
   async existPhoto(telegram_id: number) {
     try {
       const user = await this.prismaService.user.findUnique({
@@ -45,18 +69,13 @@ export class UserService {
     }
   }
 
-  async getRandomUser() {
+  async getTopRatedUser() {
     try {
-      const count = await this.prismaService.user.count();
-      if (count === 0) return null;
-
-      const randomSkip = Math.floor(Math.random() * count);
-
-      const user = await this.prismaService.user.findFirst({
-        skip: randomSkip,
+      return this.prismaService.user.findFirst({
+        orderBy: {
+          rating: 'desc',
+        },
       });
-
-      return user;
     } catch (e) {
       console.error(e);
       throw new InternalServerErrorException('Ошибка при поиске пользователя');

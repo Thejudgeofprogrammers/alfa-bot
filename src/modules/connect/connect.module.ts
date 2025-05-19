@@ -6,9 +6,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UserModule } from '../user/user.module';
 import { QuizModule } from '../quiz/quiz.module';
 import { session } from 'telegraf';
+import { RatingModule } from '../rating/rating.module';
 
 @Module({
   imports: [
+    RatingModule,
     QuizModule,
     UserModule,
     ConfigModule,

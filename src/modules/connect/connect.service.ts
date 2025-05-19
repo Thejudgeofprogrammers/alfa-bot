@@ -44,7 +44,6 @@ export class ConnectService implements OnModuleInit {
   async getQuizById(quizId: string) {
     const faqDataPath = resolve(__dirname, '../../../jsons/quiz.json');
     const faqData = JSON.parse(readFileSync(faqDataPath, 'utf-8'));
-    console.log(quizId);
     return faqData.quizzes.find(
       (quiz) =>
         quiz.id.trim().toLowerCase() === String(quizId).trim().toLowerCase(),
@@ -58,7 +57,7 @@ export class ConnectService implements OnModuleInit {
       return;
     }
 
-    const user = await this.userService.getRandomUser();
+    const user = await this.userService.getTopRatedUser();
 
     if (!user) {
       await ctx.reply('Не удалось найти коллег.');
@@ -70,9 +69,36 @@ export class ConnectService implements OnModuleInit {
       `${user?.first_name} ${user?.last_name}` +
       (user.username ? `🔗 @${user.username}` : '');
 
-    const photoPath = resolve(process.cwd(), user.photo_url);
+    const photoPath = user.photo_url
+      ? user.photo_url
+      : join(
+          __dirname,
+          '..',
+          '..',
+          '..',
+          'uploads',
+          'user_photos',
+          'not_user_photo.jpg',
+        );
 
-    await ctx.replyWithPhoto({ source: photoPath }, { caption });
+    if (fs.existsSync(photoPath)) {
+      await ctx.replyWithPhoto({ source: photoPath }, { caption });
+    } else {
+      await ctx.replyWithPhoto(
+        {
+          source: join(
+            __dirname,
+            '..',
+            '..',
+            '..',
+            'uploads',
+            'user_photos',
+            'not_user_photo.jpg',
+          ),
+        },
+        { caption },
+      );
+    }
   }
 
   async handleFAQ(ctx: Context) {

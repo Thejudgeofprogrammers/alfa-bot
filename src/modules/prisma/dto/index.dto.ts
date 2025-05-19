@@ -12,4 +12,7 @@ export class CreateUserDTO {
 
   @IsString()
   last_name: string;
+
+  @IsString()
+  photo_url: string;
 }

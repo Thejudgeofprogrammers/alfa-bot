@@ -4,9 +4,14 @@ import { ConnectUpdate } from './connect.update';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UserModule } from '../user/user.module';
+import { QuizModule } from '../quiz/quiz.module';
+import { session } from 'telegraf';
+import { RatingModule } from '../rating/rating.module';
 
 @Module({
   imports: [
+    RatingModule,
+    QuizModule,
     UserModule,
     ConfigModule,
     TelegrafModule.forRootAsync({
@@ -14,6 +19,7 @@ import { UserModule } from '../user/user.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         token: configService.get<string>('TELEGRAM_BOT_TOKEN'),
+        middlewares: [session()],
       }),
     }),
   ],

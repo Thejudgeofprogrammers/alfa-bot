@@ -6,14 +6,23 @@ import { UserService } from '../user/user.service';
 import { join, resolve } from 'path';
 import { existsSync } from 'fs';
 import { readFileSync } from 'fs';
+import {
+  my_balls_and,
+  text_for_collega,
+  text_for_start,
+  varCodes,
+} from './text';
 
 @Update()
 export class ConnectUpdate {
+  registrationSteps: Map<number, { step: string; data: any }>;
   constructor(
     private readonly connectService: ConnectService,
     private configService: ConfigService,
     private readonly userService: UserService,
-  ) {}
+  ) {
+    this.registrationSteps = new Map();
+  }
 
   @Start()
   async onStart(@Ctx() ctx: Context) {
@@ -62,17 +71,71 @@ export class ConnectUpdate {
         }
       }
     }
+
+    const photoPath = join(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      'uploads',
+      'user_photos',
+      'lis.jpg',
+    );
+
+    await ctx.replyWithPhoto({ source: photoPath });
     await ctx.reply(
-      'Добро пожаловать в корпоративного бота Альфа-Банка!',
+      text_for_start,
       Markup.keyboard([
         ['📚 Пройти квиз'],
         ['👤 Коллега недели'],
         ['❓ FAQ'],
-        ['🏆 Челлендж недели'],
+        ['Ваше количество баллов'],
+        ['Доп. регистрация для анкеты'],
       ])
         .resize()
         .oneTime(false),
     );
+  }
+
+  @Action('my_balls')
+  async onMyBallsEvent(@Ctx() ctx: Context) {
+    await ctx.answerCbQuery();
+
+    const keyboard = Object.entries(my_balls_and).map(([key, obj]) =>
+      // eslint-disable-next-line
+      [Markup.button.callback(obj.label, `chapter_${key}`)],
+    );
+    await ctx.reply('Выберите раздел:', Markup.inlineKeyboard(keyboard));
+  }
+
+  @Action(/chapter_(.+)/)
+  async onChapterSelected(@Ctx() ctx: any) {
+    const code = ctx.match[1];
+    await ctx.answerCbQuery();
+
+    const section = my_balls_and[code];
+    if (section) {
+      await ctx.reply(section.text);
+    } else {
+      await ctx.reply('Раздел не найден.');
+    }
+  }
+
+  @Action('additional_event')
+  async onAdditionalEvent(@Ctx() ctx: Context) {
+    await ctx.answerCbQuery();
+    const keyboard = Object.entries(varCodes).map(([label, code]) =>
+      // eslint-disable-next-line
+      [Markup.button.callback(label, `code_${code}`)],
+    );
+    await ctx.reply('Выберите подразделение:', Markup.inlineKeyboard(keyboard));
+  }
+
+  @Action(/code_(.+)/)
+  async onCodeSelected(@Ctx() ctx: any) {
+    const code = ctx.match[1];
+    await ctx.answerCbQuery();
+    await ctx.reply(`Код подразделения: ${code}`);
   }
 
   @Action(/faq_.+/)
@@ -130,13 +193,7 @@ export class ConnectUpdate {
     if (quiz.currentIndex >= quiz.questions.length) {
       const telegramId = ctx.from.id;
 
-      // Надо посмотреть проходил ли пользователь quiz
-      // Если нет, то сохранить пользователю какой квиз он проходил
-      // И сохранить результат в баллах
-      // А если проходил его, то вывести сообщение вы уже проходили этот квиз
-
       const check = await this.userService.checkQuiz(telegramId, quizId);
-      console.log(check);
       if (!check) {
         await this.userService.updateQuizAndRating(
           telegramId,
@@ -158,14 +215,19 @@ export class ConnectUpdate {
     }
 
     const currentQuestion = quiz.questions[quiz.currentIndex];
+    const selected = quiz.selectedAnswers?.[quiz.currentIndex];
 
     const buttons = Object.entries(currentQuestion.answers).map(
-      ([key, value]) => Markup.button.callback(value as any, `answer_${key}`),
+      ([key, value]) => {
+        const isSelected = selected === key;
+        const prefix = isSelected ? '✅ ' : '◯ ';
+        return Markup.button.callback(`${prefix}${value}`, `answer_${key}`);
+      },
     );
 
     await ctx.reply(
       currentQuestion.text,
-      Markup.inlineKeyboard(buttons, { columns: 2 }),
+      Markup.inlineKeyboard(buttons, { columns: 1 }),
     );
   }
 
@@ -192,20 +254,135 @@ export class ConnectUpdate {
 
   @On('text')
   async onText(@Ctx() ctx: any) {
+    const telegramId = ctx.from?.id;
     const text = ctx.message.text;
+
+    if (this.registrationSteps.has(telegramId)) {
+      const session = this.registrationSteps.get(telegramId);
+
+      switch (session.step) {
+        case 'full_name':
+          session.data.full_name = text;
+          session.step = 'position';
+          await ctx.reply('Введите вашу должность:');
+          return;
+
+        case 'position':
+          session.data.position = text;
+          session.step = 'city';
+          await ctx.reply('Введите ваш город:');
+          return;
+
+        case 'city':
+          session.data.city = text;
+          session.step = 'superpower';
+          await ctx.reply('Ваша суперспособность?');
+          return;
+
+        case 'superpower':
+          session.data.superpower = text;
+          session.step = 'favorite_color';
+          await ctx.reply('Любимый цвет:');
+          return;
+
+        case 'favorite_color':
+          session.data.favorite_color = text;
+          session.step = 'favorite_animal';
+          await ctx.reply('Любимое животное:');
+          return;
+
+        case 'favorite_animal':
+          session.data.favorite_animal = text;
+          session.step = 'favorite_movie';
+          await ctx.reply('Любимый фильм или актёр:');
+          return;
+
+        case 'favorite_movie':
+          session.data.favorite_movie = text;
+          session.step = 'dream';
+          await ctx.reply('О чём вы мечтаете?');
+          return;
+
+        case 'dream':
+          session.data.dream = text;
+          session.step = 'vk';
+          await ctx.reply('Ссылка на VK или @юзернейм:');
+          return;
+
+        case 'vk':
+          session.data.vk = text;
+          session.step = 'banned_social';
+          await ctx.reply('Ник в запрещённых соцсетях (если есть):');
+          return;
+
+        case 'banned_social':
+          session.data.banned_social = text;
+          session.step = 'hobbies';
+          await ctx.reply('Чем увлекаетесь вне работы?');
+          return;
+
+        case 'hobbies':
+          session.data.hobbies = text;
+          session.step = 'friend_goal';
+          await ctx.reply('Для чего хотите познакомиться с коллегами?');
+          return;
+
+        case 'friend_goal':
+          session.data.friend_goal = text;
+
+          const user_prof = await this.userService.getProfile(telegramId);
+
+          if (!user_prof) {
+            await this.userService.saveProfile({
+              telegram_id: telegramId,
+              ...session.data,
+            });
+          } else {
+            await this.userService.updateProfile({
+              telegram_id: telegramId,
+              ...session.data,
+            });
+          }
+
+          this.registrationSteps.delete(telegramId);
+          await ctx.reply('✅ Ваша анкета успешно сохранена!');
+          return;
+      }
+    }
 
     switch (text) {
       case '📚 Пройти квиз':
         await this.connectService.handleQuiz(ctx);
         break;
       case '👤 Коллега недели':
+        const photoPath = join(
+          __dirname,
+          '..',
+          '..',
+          '..',
+          'uploads',
+          'user_photos',
+          'collega.jpg',
+        );
+
+        await ctx.replyWithPhoto(
+          { source: photoPath },
+          { caption: text_for_collega },
+        );
         await this.connectService.handleColleague(ctx);
         break;
       case '❓ FAQ':
         await this.connectService.handleFAQ(ctx);
         break;
-      case '🏆 Челлендж недели':
+      case 'Ваше количество баллов':
         await this.connectService.handleChallenge(ctx);
+        break;
+      case 'Доп. регистрация для анкеты':
+        this.registrationSteps.set(ctx.from.id, {
+          step: 'full_name',
+          data: {},
+        });
+        await ctx.reply('Добро пожаловать! Как вас зовут?');
         break;
       default:
         await ctx.reply('Пожалуйста, выбери одну из кнопок на клавиатуре.');
